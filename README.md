@@ -5,27 +5,43 @@
 > A tool for running large language models on-premises using non-public
 > data
 
-**OnPrem.LLM** is a simple Python package that makes it easier to run
-large language models (LLMs) on non-public or sensitive data and on
-machines with no internet connectivity (e.g., behind corporate
-firewalls). Inspired by the
-[privateGPT](https://github.com/imartinez/privateGPT) GitHub repo and
-Simon Willison’s [LLM](https://pypi.org/project/llm/) command-line
-utility, **OnPrem.LLM** is designed to help integrate local LLMs into
-practical applications.
+**[OnPrem.LLM](https://github.com/amaiya/onprem)** is a simple Python
+package that makes it easier to run large language models (LLMs) on your
+own machines using non-public data (possibly behind corporate
+firewalls). Inspired largely by the
+[privateGPT](https://github.com/imartinez/privateGPT) GitHub repo,
+**OnPrem.LLM** is intended to help integrate local LLMs into practical
+applications.
+
+The full documentation is [here](https://amaiya.github.io/onprem/).
+
+A Google Colab demo of installing and using **OnPrem.LLM** is
+[here](https://colab.research.google.com/drive/1LVeacsQ9dmE1BVzwR3eTLukpeRIMmUqi?usp=sharing).
 
 ## Install
 
-Once [installing PyTorch](https://pytorch.org/get-started/locally/), you
-can install **OnPrem.LLM** with:
+Once you have [installed
+PyTorch](https://pytorch.org/get-started/locally/) and [installed
+llama-cpp-python](https://python.langchain.com/docs/integrations/llms/llamacpp#installation),
+you can install **OnPrem.LLM** with:
 
 ``` sh
 pip install onprem
 ```
 
-For fast GPU-accelerated inference, see additional instructions below.
+For fast GPU-accelerated inference, see [additional instructions
+below](https://amaiya.github.io/onprem/#speeding-up-inference-using-a-gpu).
+See [the FAQ](https://amaiya.github.io/onprem/#faq), if you experience
+issues with
+[llama-cpp-python](https://pypi.org/project/llama-cpp-python/)
+installation.
 
-## How to use
+**Note:** The `pip install onprem` command will install PyTorch and
+llama-cpp-python automatically if not already installed, but we
+recommend visting the links above to install these packages in a way
+that is optimized for your system (e.g., with GPU support).
+
+## How to Use
 
 ### Setup
 
@@ -35,12 +51,13 @@ from onprem import LLM
 llm = LLM()
 ```
 
-By default, a 7B-parameter model is used. If `use_larger=True`, a
-13B-parameter is used. You can also supply the URL to an LLM of your
-choosing to [`LLM`](https://amaiya.github.io/onprem/core.html#llm) (see
-code generation section below for an example). Currently, only models in
-GGML format are supported. Future versions of **OnPrem.LLM** will
-transition to the newer GGUF format.
+By default, a 7B-parameter model is downloaded and used. If
+`use_larger=True`, a 13B-parameter is used. You can also supply the URL
+to an LLM of your choosing to
+[`LLM`](https://amaiya.github.io/onprem/core.html#llm) (see the [code
+generation section
+below](https://amaiya.github.io/onprem/#text-to-code-generation) for an
+example). As of v0.0.20, **OnPrem.LLM** supports the newer GGUF format.
 
 ### Send Prompts to the LLM to Solve Problems
 
@@ -62,45 +79,60 @@ saved_output = llm.prompt(prompt)
 
     Cillian Murphy, Florence Pugh
 
+Additional prompt examples are [shown
+here](https://amaiya.github.io/onprem/examples.html).
+
 ### Talk to Your Documents
 
-Answers are generated from the content of your documents.
+Answers are generated from the content of your documents (i.e.,
+[retrieval augmented generation](https://arxiv.org/abs/2005.11401) or
+RAG). Here, we will supply `use_larger=True` to use the larger default
+model better suited to this use case in addition to using [GPU
+offloading](https://amaiya.github.io/onprem/#speeding-up-inference-using-a-gpu)
+to speed up answer generation.
+
+``` python
+from onprem import LLM
+
+llm = LLM(use_larger=True, n_gpu_layers=35)
+```
 
 #### Step 1: Ingest the Documents into a Vector Database
 
 ``` python
-llm.ingest('./sample_data')
+llm.ingest("./sample_data")
 ```
 
-    2023-09-03 16:30:54.459509: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  SSE4.1 SSE4.2 AVX AVX2 FMA
-    To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
-    Loading new documents: 100%|██████████████████████| 2/2 [00:00<00:00, 17.16it/s]
-
-    Creating new vectorstore
+    Creating new vectorstore at /home/amaiya/onprem_data/vectordb
     Loading documents from ./sample_data
-    Loaded 11 new documents from ./sample_data
-    Split into 62 chunks of text (max. 500 tokens each)
+    Loaded 12 new documents from ./sample_data
+    Split into 153 chunks of text (max. 500 chars each)
     Creating embeddings. May take some minutes...
     Ingestion complete! You can now query your documents using the LLM.ask method
+
+    Loading new documents: 100%|██████████████████████| 3/3 [00:00<00:00, 25.52it/s]
 
 #### Step 2: Answer Questions About the Documents
 
 ``` python
-question = """What is  ktrain?""" 
-answer, docs = llm.ask(question)
-print('\n\nReferences:\n\n')
-for i, document in enumerate(docs):
+question = """What is  ktrain?"""
+result = llm.ask(question)
+```
+
+     ktrain is a low-code platform designed to facilitate the full machine learning workflow, from preprocessing inputs to training, tuning, troubleshooting, and applying models. It focuses on automating other aspects of the ML workflow in order to augment and complement human engineers rather than replacing them. Inspired by fastai and ludwig, ktrain is intended to democratize machine learning for beginners and domain experts with minimal programming or data science experience.
+
+The sources used by the model to generate the answer are stored in
+`result['source_documents']`:
+
+``` python
+print("\nSources:\n")
+for i, document in enumerate(result["source_documents"]):
     print(f"\n{i+1}.> " + document.metadata["source"] + ":")
     print(document.page_content)
 ```
 
-     Ktrain is a low-code machine learning library designed to augment human
-    engineers in the machine learning workow by automating or semi-automating various
-    aspects of model training, tuning, and application. Through its use, domain experts can
-    leverage their expertise while still benefiting from the power of machine learning techniques.
 
-    References:
-
+    Sources:
 
 
     1.> ./sample_data/ktrain_paper.pdf:
@@ -133,19 +165,143 @@ for i, document in enumerate(docs):
     tuning, troubleshooting, and applying models. In this way, ktrain is well-suited for domain
     experts who may have less experience with machine learning and software coding. Where
 
-### Text to Code Generation
+### Guided Prompts
 
-We’ll use the CodeUp LLM by supplying the URL and employ the particular
-prompt format this model expects.
+You can use **OnPrem.LLM** with the
+[Guidance](https://github.com/guidance-ai/guidance) package to guide the
+LLM to generate outputs based on your conditions and constraints. We’ll
+show a couple of examples here, but see [our documentation on guided
+prompts](https://amaiya.github.io/onprem/examples_guided_prompts.html)
+for more information.
+
+#### Structured Outputs with [`onprem.guider.Guider`](https://amaiya.github.io/onprem/guider.html#guider)
+
+Here, we’ll use a
+[`Guider`](https://amaiya.github.io/onprem/guider.html#guider)instance
+to generate fictional D&D-type characters that conform to the precise
+structure we want (i.e., JSON):
+
+``` python
+from onprem.guider import Guider
+guider = Guider(llm)
+```
+
+``` python
+# create the Guider instance
+from onprem.guider import Guider
+from guidance import gen, select
+guider = Guider(llm)
+
+# this is a function that generates a Guidance prompt that will be fed to Guider
+sample_weapons = ["sword", "axe", "mace", "spear", "bow", "crossbow"]
+sample_armour = ["leather", "chainmail", "plate"]
+def generate_character_prompt(
+    character_one_liner,
+    weapons: list[str] = sample_weapons,
+    armour: list[str] = sample_armour,
+    n_items: int = 3
+):
+    prompt = ''
+    prompt += "{"
+    prompt += f'"description" : "{character_one_liner}",'
+    prompt += '"name" : "' + gen(name="character_name", stop='"') + '",'
+    prompt += '"age" : ' + gen(name="age", regex="[0-9]+") + ','
+    prompt += '"armour" : "' + select(armour, name="armour") + '",'
+    prompt += '"weapon" : "' + select(weapons, name="weapon") + '",'
+    prompt += '"class" : "' + gen(name="character_class", stop='"') + '",'
+    prompt += '"mantra" : "' + gen(name="mantra", stop='"') + '",'
+    prompt += '"strength" : ' + gen(name="age", regex="[0-9]+") + ','
+    prompt += '"quest_items" : [ '
+    for i in range(n_items):
+        prompt += '"' + gen(name="items", list_append=True, stop='"') + '"'  
+        if i < n_items - 1:
+            prompt += ','
+    prompt += "]"
+    prompt += "}"
+    return prompt
+```
+
+``` python
+# feed prompt to Guider and extract JSON
+import json
+d = guider.prompt(generate_character_prompt("A quick and nimble fighter"), echo=False)
+print('Generated JSON:')
+print(json.dumps(d, indent=4))
+```
+
+    Generated JSON:
+    {
+        "items": [
+            "Quest Item 3",
+            "Quest Item 2",
+            "Quest Item 1"
+        ],
+        "age": "10",
+        "mantra": "I am the blade of justice.",
+        "character_class": "fighter",
+        "weapon": "sword",
+        "armour": "leather",
+        "character_name": "Katana"
+    }
+
+#### Using Regular Expressions to Control LLM Generation
+
+``` python
+prompt = f"""Question: Luke has ten balls. He gives three to his brother. How many balls does he have left?
+Answer: """ + gen(name='answer', regex='\d+')
+
+guider.prompt(prompt, echo=False)
+```
+
+    {'answer': '7'}
+
+``` python
+prompt = '19, 18,' + gen(name='output', max_tokens=50, stop_regex='[^\d]7[^\d]')
+guider.prompt(prompt)
+```
+
+<pre style='margin: 0px; padding: 0px; padding-left: 8px; margin-left: -8px; border-radius: 0px; border-left: 1px solid rgba(127, 127, 127, 0.2); white-space: pre-wrap; font-family: ColfaxAI, Arial; font-size: 15px; line-height: 23px;'>19, 18<span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>,</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'> 1</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>7</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>,</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'> 1</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>6</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>,</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'> 1</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>5</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>,</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'> 1</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>4</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>,</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'> 1</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>3</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>,</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'> 1</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>2</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>,</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'> 1</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>1</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>,</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'> 1</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>0</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>,</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'> 9</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>,</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'> 8</span><span style='background-color: rgba(0, 165, 0, 0.15); border-radius: 3px;' title='0.0'>,</span></pre>
+
+    {'output': ' 17, 16, 15, 14, 13, 12, 11, 10, 9, 8,'}
+
+See [the
+documentation](https://amaiya.github.io/onprem/examples_guided_prompts.html)
+for more examples of how to use
+[Guidance](https://github.com/guidance-ai/guidance) with **OnPrem.LLM**.
+
+### Summarization Pipeline
+
+Summarize your raw documents (e.g., PDFs, MS Word) with an LLM.
 
 ``` python
 from onprem import LLM
-url = 'https://huggingface.co/TheBloke/CodeUp-Llama-2-13B-Chat-HF-GGML/resolve/main/codeup-llama-2-13b-chat-hf.ggmlv3.q4_1.bin'
-llm = LLM(url, n_gpu_layers=43) # see below for GPU information
+llm = LLM(n_gpu_layers=35, verbose=False, mute_stream=True) # disabling viewing of intermediate summarization prompts/inferences
+```
+
+``` python
+from onprem.pipelines import Summarizer
+summ = Summarizer(llm)
+
+text = summ.summarize('sample_data/1/ktrain_paper.pdf', max_chunks_to_use=5) # omit max_chunks_to_use parameter to consider entire document
+print(text)
+```
+
+     The KTrain library provides an easy-to-use framework for building and training machine learning models using low-code techniques for various data types (text, image, graph, tabular) and tasks (classification, regression). It can be used to fine-tune pretrained models in text classification and image classification tasks respectively. Additionally, it reduces cognitive load by providing a unified interface to various and disparate machine learning tasks, allowing users to focus on more important tasks that may require domain expertise or are less amenable to automation.
+
+### Text to Code Generation
+
+We’ll use the CodeUp LLM by supplying the URL and employing the
+particular prompt format this model expects.
+
+``` python
+from onprem import LLM
+
+url = "https://huggingface.co/TheBloke/CodeUp-Llama-2-13B-Chat-HF-GGUF/resolve/main/codeup-llama-2-13b-chat-hf.Q4_K_M.gguf"
+llm = LLM(url, n_gpu_layers=43)  # see below for GPU information
 ```
 
 Setup the prompt based on what [this model
-expects](https://huggingface.co/TheBloke/CodeUp-Llama-2-13B-Chat-HF-GGML#prompt-template-alpaca)
+expects](https://huggingface.co/TheBloke/CodeUp-Llama-2-13B-Chat-HF-GGUF#prompt-template-alpaca)
 (this is important):
 
 ``` python
@@ -159,7 +315,9 @@ Below is an instruction that describes a task. Write a response that appropriate
 ```
 
 ``` python
-answer = llm.prompt('Write Python code to validate an email address.', prompt_template=template)
+answer = llm.prompt(
+    "Write Python code to validate an email address.", prompt_template=template
+)
 ```
 
 
@@ -187,16 +345,20 @@ Let’s try out the code generated above.
 
 ``` python
 import re
+
+
 def validate_email(email):
     # Use a regular expression to check if the email address is in the correct format
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
     if re.match(pattern, email):
         return True
     else:
         return False
-print(validate_email('sam@@openai.com')) # bad email address
-print(validate_email('sam@openai'))      # bad email address
-print(validate_email('sam@openai.com'))  # good email address
+
+
+print(validate_email("sam@@openai.com"))  # bad email address
+print(validate_email("sam@openai"))  # bad email address
+print(validate_email("sam@openai.com"))  # good email address
 ```
 
     False
@@ -206,53 +368,182 @@ print(validate_email('sam@openai.com'))  # good email address
 The generated code may sometimes need editing, but this one worked
 out-of-the-box.
 
-### Speeding Up Inference Using a GPU
+## Built-In Web App
 
-The above example employed the use of a CPU.  
-If you have a GPU (even an older one with less VRAM), you can speed up
-responses.
-
-#### Step 1: Install `llama-cpp-python` with CUBLAS support
+**OnPrem.LLM** includes a built-in Web app to access the LLM. To start
+it, run the following command after installation:
 
 ``` shell
-CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install --upgrade --force-reinstall llama-cpp-python==0.1.69 --no-cache-dir
+onprem --port 8000
 ```
 
-It is important to use the specific version shown above due to library
-incompatibilities.
+Then, enter `localhost:8000` (or `<domain_name>:8000` if running on
+remote server) in a Web browser to access the application:
+
+<img src="https://raw.githubusercontent.com/amaiya/onprem/master/images/onprem_screenshot.png" border="1" alt="screenshot" width="775"/>
+
+For more information, [see the corresponding
+documentation](https://amaiya.github.io/onprem/webapp.html).
+
+## Speeding Up Inference Using a GPU
+
+The above example employed the use of a CPU. If you have a GPU (even an
+older one with less VRAM), you can speed up responses. See [the
+LangChain docs on
+LLama.cpp](https://python.langchain.com/docs/integrations/llms/llamacpp)
+for installing `llama-cpp-python` with GPU support for your system.
+
+The steps below describe installing and using `llama-cpp-python` with
+`cuBLAS` support and can be employed for GPU acceleration on systems
+with NVIDIA GPUs (e.g., Linux, WSL2, Google Colab).
+
+#### Step 1: Install `llama-cpp-python` with cuBLAS support
+
+``` shell
+CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install --upgrade --force-reinstall llama-cpp-python --no-cache-dir
+
+# For Mac users replace above with:
+# CMAKE_ARGS="-DLLAMA_METAL=on" FORCE_CMAKE=1 pip install --upgrade --force-reinstall llama-cpp-python --no-cache-dir
+```
 
 #### Step 2: Use the `n_gpu_layers` argument with [`LLM`](https://amaiya.github.io/onprem/core.html#llm)
 
 ``` python
-llm = LLM(model_name=os.path.basename(url), n_gpu_layers=128)
+llm = LLM(n_gpu_layers=35)
 ```
+
+The value for `n_gpu_layers` depends on your GPU memory and the model
+you’re using (e.g., max of 35 for default 7B model). You can reduce the
+value if you get an error (e.g., `CUDA error: out-of-memory`). For
+instance, using two old NVDIDIA TITAN V GPUs each with 12GB of VRAM, 59
+out 83 layers in a [quantized Llama-2 70B
+model](https://huggingface.co/TheBloke/Llama-2-70B-chat-GGUF/resolve/main/llama-2-70b-chat.Q3_K_S.gguf)
+can be offloaded to the GPUs (i.e., 60 layers or more results in a “CUDA
+out of memory” error).
 
 With the steps above, calls to methods like `llm.prompt` will offload
 computation to your GPU and speed up responses from the LLM.
 
+The above assumes that NVIDIA drivers and the CUDA toolkit are already
+installed. On Ubuntu Linux systems, this can be accomplished [with a
+single
+command](https://lambdalabs.com/lambda-stack-deep-learning-software).
+
 ## FAQ
 
-1.  How do I use other models with **OnPrem.LLM**?
+1.  **How do I use other models with OnPrem.LLM?**
 
-> You supply the URL to other models to the
-> [`LLM`](https://amaiya.github.io/onprem/core.html#llm) constructor, as
-> we did above in the code generation example.
+    > You can supply the URL to other models to the `LLM` constructor,
+    > as we did above in the code generation example.
 
-2.  I’m behind a corporate firewall and receiving an SSL error when
-    trying to download the model?
+    > As of v0.0.20, we support models in GGUF format, which supersedes
+    > the older GGML format. You can find llama.cpp-supported models
+    > with `GGUF` in the file name on
+    > [huggingface.co](https://huggingface.co/models?sort=trending&search=gguf).
 
-> Try this:
->
-> ``` python
-> from onprem import LLM
-> LLM.download_model(url, ssl_verify=False)
-> ```
+    > Make sure you are pointing to the URL of the actual GGUF model
+    > file, which is the “download” link on the model’s page. An example
+    > for **Mistral-7B** is shown below:
 
-3.  Which models can I use with this?
+    > <img src="https://raw.githubusercontent.com/amaiya/onprem/master/images/model_download_link.png" border="1" alt="screenshot" width="775"/>
 
-> We currently support models in GGML format. However, the GGML format
-> has now been superseded by GGUF. As of August 21st 2023, llama.cpp no
-> longer supports GGML models, which is why we are pinning to an older
-> version of all dependencies.
->
-> Future versions of **OnPrem.LLM** will use the newer GGUF format.
+    > Note that some models have specific prompts. For instance, the
+    > prompt template required for **Zephyr-7B**, as described on the
+    > [model’s
+    > page](https://huggingface.co/TheBloke/zephyr-7B-beta-GGUF), is:
+    >
+    > `<|system|>\n</s>\n<|user|>\n{prompt}</s>\n<|assistant|>`
+    >
+    > So, to use the Zephyr-7B model, you must supply the
+    > `prompt_template` argument to methods like `LLM.ask` and
+    > `LLM.prompt` (or specify it in the `webapp.yml` configuration for
+    > the Web app).
+    >
+    > ``` python
+    > # how to use Zephyr-7B with OnPrem.LLM
+    > llm = LLM(model_url='https://huggingface.co/TheBloke/zephyr-7B-beta-GGUF/resolve/main/zephyr-7b-beta.Q4_K_M.gguf')
+    >  prompt_template = "<|system|>\n</s>\n<|user|>\n{prompt}</s>\n<|assistant|>"
+    >  llm.prompt("List three cute names for a cat.", prompt_template=prompt_template)
+    > ```
+
+2.  **I’m behind a corporate firewall and am receiving an SSL error when
+    trying to download the model?**
+
+    > Try this:
+    >
+    > ``` python
+    > from onprem import LLM
+    > LLM.download_model(url, ssl_verify=False)
+    > ```
+
+3.  **How do I use this on a machine with no internet access?**
+
+    > Use the `LLM.download_model` method to download the model files to
+    > `<your_home_directory>/onprem_data` and transfer them to the same
+    > location on the air-gapped machine.
+
+    > For the `ingest` and `ask` methods, you will need to also download
+    > and transfer the embedding model files:
+    >
+    > ``` python
+    > from sentence_transformers import SentenceTransformer
+    > model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+    > model.save('/some/folder')
+    > ```
+
+    > Copy the `some/folder` folder to the air-gapped machine and supply
+    > the path to `LLM` via the `embedding_model_name` parameter.
+
+4.  **When installing `onprem`, I’m getting errors related to
+    `llama-cpp-python` on Windows/Mac/Linux?**
+
+    > See [this LangChain documentation on
+    > LLama.cpp](https://python.langchain.com/docs/integrations/llms/llamacpp)
+    > for help on installing the `llama-cpp-python` package for your
+    > system. Additional tips for different operating systems are shown
+    > below:
+
+    > For **Linux** systems like Ubuntu, try this:
+    > `sudo apt-get install build-essential g++ clang`. Other tips are
+    > [here](https://github.com/oobabooga/text-generation-webui/issues/1534).
+
+    > For **Windows** systems, either use [Windows Subsystem for Linux
+    > (WSL)](https://learn.microsoft.com/en-us/windows/wsl/install) or
+    > install [Microsoft Visual Studio build
+    > tools](https://visualstudio.microsoft.com/vs/older-downloads/) and
+    > ensure the selections shown in [this
+    > post](https://github.com/imartinez/privateGPT/issues/445#issuecomment-1561343405)
+    > are installed. WSL is recommended.
+
+    > For **Macs**, try following [these
+    > tips](https://github.com/imartinez/privateGPT/issues/445#issuecomment-1563333950).
+
+    > If you still have problems, there are various other tips for each
+    > of the above OSes in [this privateGPT repo
+    > thread](https://github.com/imartinez/privateGPT/issues/445). Of
+    > course, you can also [easily
+    > use](https://colab.research.google.com/drive/1LVeacsQ9dmE1BVzwR3eTLukpeRIMmUqi?usp=sharing)
+    > **OnPrem.LLM** on Google Colab.
+
+5.  **`llama-cpp-python` is failing to load my model from the model path
+    on Google Colab.**
+
+    > For reasons that are unclear, newer versions of `llama-cpp-python`
+    > fail to load models on Google Colab unless you supply
+    > `verbose=True` to the `LLM` constructor (which is passed directly
+    > to `llama-cpp-python`). If you experience this problem locally,
+    > try supplying `verbose=True` to `LLM`.
+
+6.  **I’m getting an `“Illegal instruction (core dumped)` error when
+    instantiating a `langchain.llms.Llamacpp` or `onprem.LLM` object?**
+
+    > Your CPU may not support instructions that `cmake` is using for
+    > one reason or another (e.g., [due to Hyper-V in VirtualBox
+    > settings](https://stackoverflow.com/questions/65780506/how-to-enable-avx-avx2-in-virtualbox-6-1-16-with-ubuntu-20-04-64bit)).
+    > You can try turning them off when building and installing
+    > `llama-cpp-python`:
+
+    > ``` sh
+    > # example
+    > CMAKE_ARGS="-DLLAMA_CUBLAS=ON -DLLAMA_AVX2=OFF -DLLAMA_AVX=OFF -DLLAMA_F16C=OFF -DLLAMA_FMA=OFF" FORCE_CMAKE=1 pip install --force-reinstall llama-cpp-python --no-cache-dir
+    > ```
